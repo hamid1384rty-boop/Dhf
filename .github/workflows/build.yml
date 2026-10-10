@@ -1,4 +1,4 @@
-name: Build APK
+name: Build signed APK
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ jobs:
         run: |
           set -e
           ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*.zip' | head -n 1)
-          test -n "$ZIP_FILE" || { echo "ZIP not found in repository root"; exit 1; }
+          test -n "$ZIP_FILE" || { echo "Project ZIP not found in repository root"; exit 1; }
           rm -rf /tmp/project-source
           mkdir -p /tmp/project-source
           unzip -q -o "$ZIP_FILE" -d /tmp/project-source
@@ -52,18 +52,31 @@ jobs:
           unzip -q gradle-9.3.1-bin.zip -d "$HOME"
           echo "$HOME/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
-      - name: Create debug keystore
+      - name: Restore signing key from GitHub Secret
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
-          keytool -genkeypair -v -keystore debug.keystore -storepass android \
-            -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
-            -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          set -e
+          test -n "$KEYSTORE_BASE64" || { echo "KEYSTORE_BASE64 secret is missing"; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > my-upload-key.jks
+          chmod 600 my-upload-key.jks
+          keytool -list -keystore my-upload-key.jks \
+            -storepass "$STORE_PASSWORD" -alias upload >/dev/null
 
-      - name: Build APK
-        run: gradle --no-daemon :app:assembleDebug
+      - name: Build signed release APK
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+        run: |
+          test -n "$STORE_PASSWORD" || { echo "STORE_PASSWORD secret is missing"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "KEY_PASSWORD secret is missing"; exit 1; }
+          gradle --no-daemon :app:assembleRelease
 
-      - name: Upload APK
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: hamid-taneel-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: hamid-taneel-signed-release
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
