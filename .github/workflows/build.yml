@@ -18,10 +18,13 @@ jobs:
           set -e
           ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*.zip' | head -n 1)
           test -n "$ZIP_FILE" || { echo "ZIP not found in repository root"; exit 1; }
+          rm -rf /tmp/project-source
           mkdir -p /tmp/project-source
           unzip -q -o "$ZIP_FILE" -d /tmp/project-source
-          if [ "$(find /tmp/project-source -mindepth 1 -maxdepth 1 | wc -l)" = "1" ] && [ -d "$(find /tmp/project-source -mindepth 1 -maxdepth 1 -type d | head -n 1)" ]; then
-            cp -a "$(find /tmp/project-source -mindepth 1 -maxdepth 1 -type d | head -n 1)"/. .
+          TOP=$(find /tmp/project-source -mindepth 1 -maxdepth 1 | head -n 1)
+          COUNT=$(find /tmp/project-source -mindepth 1 -maxdepth 1 | wc -l)
+          if [ "$COUNT" = "1" ] && [ -d "$TOP" ]; then
+            cp -a "$TOP"/. .
           else
             cp -a /tmp/project-source/. .
           fi
@@ -40,15 +43,14 @@ jobs:
           set -e
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           test -x "$SDKMANAGER" || SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)"
-          test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;35.0.0" "ndk;26.1.10909125"
 
-      - name: Install Gradle
+      - name: Install Gradle 9.3.1
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
-          unzip -q gradle-8.7-bin.zip -d "$HOME"
-          echo "$HOME/gradle-8.7/bin" >> "$GITHUB_PATH"
+          wget -q https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
+          unzip -q gradle-9.3.1-bin.zip -d "$HOME"
+          echo "$HOME/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
       - name: Create debug keystore
         run: |
